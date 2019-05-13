@@ -1,0 +1,137 @@
+%------------DOC TYPE-------------------%
+\documentclass[11pt]{report}
+
+%-----------INCLUDES----------------------%
+\usepackage[english]{babel}
+\usepackage[utf8x]{inputenc}
+\usepackage[left=2.5cm, right=2cm, top=2.5cm]{geometry} %margins
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage[colorinlistoftodos]{todonotes}
+\usepackage{subfiles}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{verbatim}
+\usepackage[bottom]{footmisc}
+\usepackage{float} %CONCRETE FIGURE PLACEMENT
+\usepackage{listings} %CODE LISINGS
+\usepackage{color}
+%\usepackage{tikzit}
+%\usepackage{bm}
+\usepackage{tabu}
+\usepackage{hhline}
+\usepackage[T1]{fontenc}
+\usepackage[utf8x]{inputenc}
+\usepackage[english]{babel}
+\usepackage{csvsimple}
+\usepackage{hyperref}
+\usepackage{pgflibraryarrows}
+\usepackage{svg}
+
+%----------------TIKZ STYLES---------------%
+
+%section depth
+\setcounter{secnumdepth}{2}
+
+%---------------PAGE STYLE/HEADER-FOOTER-------------------%
+\pagestyle{fancy}% Change page style to fancy
+\fancyhf{}% Clear header/footer
+\fancyhead[R]{WifiHifi: a wireless, multi-channel audio system}
+%\fancyhead[L]{}
+\fancyfoot[R]{\thepage}% \fancyfoot[R]{\thepage}
+\renewcommand{\headrulewidth}{0.5pt}
+\renewcommand{\footrulewidth}{0.5pt}
+\fancypagestyle{plain}{} %put HF on chapter page
+ 
+ % footnote in footer
+\renewcommand*\footnoterule{}
+ 
+%-------------TITLE CONFIG--------%
+%\titleformat{\chapter}[display]
+ % {\normalfont\bfseries}{}{0pt}{\LARGE}
+
+ %-----------FONT--------------%
+ %\renewcommand{\familydefault}{ptm}
+
+%-----------GRAPHICS---------------%
+%\graphicspath{{../figures/}}
+\graphicspath{./figs}
+
+%-------LISTINGS----------%
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+ 
+\lstdefinestyle{mystyle}
+{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{blue},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=1
+}
+
+\lstset
+{
+    emph={BYTE_SWAP},
+    emphstyle={\color{orange}},
+    otherkeywords = {memset, memcpy},
+    style=mystyle
+}
+
+\providecommand{\main}{.}
+
+
+%------------STRUCTURE------------%
+\begin{document}
+
+%\subfile{0-Misc/titlepage}
+\pagenumbering{roman}
+
+
+%------------PRE-CONTENTS------------%
+\subfile{titlepage}
+\subfile{abstract}
+\subfile{acks}
+\tableofcontents
+\setcounter{page}{3}
+\listoffigures
+\listoftables
+\lstlistoflistings
+
+\pagebreak
+
+\clearpage
+\pagenumbering{arabic}
+
+%------------ACTUAL STUFF------------%
+\subfile{intro}
+\subfile{acoustics}
+\subfile{electronics}
+\subfile{software}
+\subfile{evaluation}
+\subfile{contributions}
+\pagebreak
+
+%------------BIBLIOGRAPHY/APPENDIX------------%
+\bibliographystyle{unsrt}
+\addcontentsline{toc}{chapter}{Bibliography}
+\bibliography{refs}
+
+\appendix
+
+
+
+\end{document}
