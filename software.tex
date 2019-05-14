@@ -19,19 +19,19 @@ As this was the first prototype for the project, the decision was made to select
         \hline
         \textbf{PLATFORM} &  \textbf{CPU} & \textbf{RAM} & \textbf{DAC} & \textbf{WLAN} & \textbf{PRICE}  \\
         \hhline{|=|=|=|=|=|=|}
-        Raspberry Pi 3B & ARM Cortex-A5 & 1GB & NO & YES & £34.00 \\
+        Raspberry Pi 3B\cite{rpiB} & ARM Cortex-A5 & 1GB & NO & YES & £34.00 \\
         & 1.4GHz quad-core & & & & \\
         \hline
-        Hardkernel Odroid-CO & ARM Cortex-A5 & 1GB & NO & NO & £32.97 \\
+        Hardkernel Odroid-CO\cite{odroid} & ARM Cortex-A5 & 1GB & NO & NO & £32.97 \\
         & 1.5GHz quad-core & & & & \\
         \hline
-        iMX233-OLinuXino-MAXI & ARM 926EJ-S & 64MB & YES & NO & £42.13 \\
+        iMX233-OLinuXino-MAXI\cite{olimex} & ARM 926EJ-S & 64MB & YES & NO & £42.13 \\
         & 454MHz single-core & & & & \\
         \hline
-        Blueberry Pi & ARM Cortex-A7 & 64MB & NO & YES & n/a \\
+        Blueberry Pi\cite{blueberrypi} & ARM Cortex-A7 & 64MB & NO & YES & n/a \\
         & 1.2GHz single-core & & & & \\
         \hline
-        Raspberry Pi Zero W & ARM 1176JZF-S & 512MB & NO & YES & £9.00 \\
+        Raspberry Pi Zero W\cite{rpi} & ARM 1176JZF-S & 512MB & NO & YES & £9.00 \\
         & 1.0GHz single-core & & & & \\
         \hline
         
@@ -91,7 +91,77 @@ A raw streaming protocol could be implemented at a low level or, a sound server 
 \subsection{Overview}
 %threads, class hierarchy etc
 \subsection{Signal Processing}
+In order to reduce electronic component count, DSP has been used to implement signal processing tasks that would typically be achieved using analogue circuitry.
+These include the crossover filters, frequency correction circuitry and tone controls.
 \subsubsection{Crossover Filters}
+A two-way crossover circuit is typically used to split the high and low frequencies between the tweeter and woofer respectively around a common crossover frequency using highpass and lowpass filters;
+the specific value of this crossover frequency is chosen based on the frequency response of each driver.
+As can be seen in figure \ref{fig:tweeter-response}, the resonant frequencies of the tweeter is approximately 1.5kHz.
+The crossover frequency was initially set at 3kHz, an octave above the tweeter's resonant frequency.
+After some trial and error, it was decided that a crossover frequency of 2.5kHz resulted in the most pleasant response, this is obviously subjective however implementing the filters in software allows them to be varied easily.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[scale=0.6]{./figs/tweeter-response.pdf}        
+    \caption{Impedance and Amplitude response of Tweeter with respect to Frequency\cite{tweeter}}
+    \label{fig:tweeter-response}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[scale=0.5]{./figs/woofer-response.pdf}        
+    \caption{Impedance and Amplitude response of Woofer with respect to Frequency\cite{woofer}}
+    \label{fig:woofer-response}
+\end{figure}
+
+Each crossover filter was implemented using an FIR filter with 75 coefficients. 
+A class (\lstinline{FIRFilter}) was written that calculates the coefficients and performs sample by sample filtering of an input audio sample. 
+The filter implementation utilises a real-time FIR filter library written by Bernd Porr (\lstinline{fir1}), the calculated coefficients are referenced by an instantiated \lstinline{fir1} object that performs the convolution algorithm. 
+
+\medskip
+On object construction, the class will numerically calculate the filter impulse response for the specified filter type and number of coefficents/taps. 
+The impulse responses are calculated using the following equations\cite{DSP-berndporr}, where $h(n)$, $n$ and $\omega _c$ represent the filter impulse response, current sample and angular cutoff frequency ($\omega _c = 2\pi f_c$) respectively.
+
+\begin{equation}
+    h_{lowpass}(n) =
+    \begin{cases}
+        \frac{\omega _c}{\pi}     &\text{for \(n=0\)}  \\
+        \frac{1}{\pi n}sin(\omega _cn)    &\text{else}
+    \end{cases}
+\end{equation}
+\begin{equation}
+    h_{highpass}(n) =
+    \begin{cases}
+        1-\frac{\omega _c}{\pi}     &\text{for \(n=0\)}  \\
+        -\frac{1}{\pi n}sin(\omega _cn)    &\text{else}
+    \end{cases}
+\end{equation}
+
+\medskip
+The impulse response is then windowed with a Blackman window.
+This was chosen due to its greater attenuation in the stop band than a Hamming window\cite{DSP-berndporr}.
+It was calculated using the following equation.
+
+\begin{equation}
+    \omega (n)=
+    0.42 + 0.5cos\left(\frac{2\pi n}{M}\right) + 0.08cos\left(\frac{4\pi n}{M}\right)
+\end{equation}
+
+Figures \ref{fig:tweeter-fft} and \ref{fig:woofer-fft} show plots of FFTs recorded for the highpass and lowpass filters respectively.
+They were obtained by probing the relevant DAC output line and passing Gaussian white noise through the WifiHifi client, all other software filtering was disabled.
+
+\begin{figure}[H]
+    \centering
+    \caption{FFT of Highpass Crossover Filter}
+    \label{fig:tweeter-fft}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \caption{FFT of Lowpass Crossover Filter}
+    \label{fig:woofer-fft}
+\end{figure}
+
 \subsubsection{Frequency Correction}
 \subsubsection{3-Band EQ}
 \subsubsection{Results}
@@ -104,6 +174,18 @@ A raw streaming protocol could be implemented at a low level or, a sound server 
 %describe algorithm/maths
 \subsection{Implementation}
 \subsection{Results}
+\begin{tikzpicture}
+    \begin{axis}[
+        width=\textwidth, 
+        height=\axisdefaultheight, 
+        xtick={0,1,...,10},
+        xmin=0,
+        xmax=10]
+    %\addplot table [mark=none, x=t, y=a, col sep=comma] {./data/saleae-outputs/sync.csv};
+    
+    \addplot table [mark=none, x=t, y=b, col sep=comma] {./data/saleae-outputs/run1.csv};
+    \end{axis}
+\end{tikzpicture}
 
 \section{Desktop Application}
 \subsection{Overview}
