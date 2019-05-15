@@ -116,7 +116,42 @@ After some trial and error, it was decided that a crossover frequency of 2.5kHz 
 
 Each crossover filter was implemented using an FIR filter with 75 coefficients. 
 A class (\lstinline{FIRFilter}) was written that calculates the coefficients and performs sample by sample filtering of an input audio sample. 
-The filter implementation utilises a real-time FIR filter library written by Bernd Porr (\lstinline{fir1}), the calculated coefficients are referenced by an instantiated \lstinline{fir1} object that performs the convolution algorithm. 
+The filter implementation utilises a real-time FIR filter library written by Bernd Porr\cite{fir1} (\lstinline{fir1}), the calculated coefficients are referenced by an instantiated \lstinline{fir1} object that performs the convolution algorithm. 
+A UML class diagram of the \lstinline{FIRFilter} class can be seen in figure \ref{fig:fir-uml}.
+
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}
+        \umlclass{WifiHifi::FIRFilter}{  
+        - Fir1* : fir \\
+        - double* : coeffs 
+        }{
+        <<constructor>> FIRFilter() \\
+        <<destructor>> \char`\~ FIRFilter() \\
+        + filter(double) : double \\ 
+        + reset() : void \\
+        - LowpassCoeffs(int, double) : bool \\
+        - HighpassCoeffs(int, double) : bool \\
+        - AllpassCoeffs(int) : bool
+        }
+
+        \umlclass[x=7.5, y=0]{Fir1}{ 
+        - unsigned : taps \\
+        - double* : buffer \\
+        - double* : coefficients 
+        }{
+        <<constructor>> Fir1() \\
+        <<destructor>> \char`\~ Fir1() \\
+        + filter(double) : double \\ 
+        + reset() : void \\
+        + zeroCoeff() : void \\
+        }
+
+        \umlunicompo[geometry=-|]{Fir1}{WifiHifi::FIRFilter}
+    \end{tikzpicture}
+    \caption{FIRFilter UML Class Diagram}
+    \label{fig:fir-uml}
+\end{figure}
 
 \medskip
 On object construction, the class will numerically calculate the filter impulse response for the specified filter type and number of coefficents/taps. 
@@ -140,10 +175,10 @@ The impulse responses are calculated using the following equations\cite{DSP-bern
 \medskip
 The impulse response is then windowed with a Blackman window.
 This was chosen due to its greater attenuation in the stop band than a Hamming window\cite{DSP-berndporr}.
-It was calculated using the following equation.
+It was calculated using the following equation where $w(n)$, $n$ and $M$ are the window function, current sample and number of coefficients/taps respectively.
 
 \begin{equation}
-    \omega (n)=
+    w(n)=
     0.42 + 0.5cos\left(\frac{2\pi n}{M}\right) + 0.08cos\left(\frac{4\pi n}{M}\right)
 \end{equation}
 
@@ -163,6 +198,122 @@ They were obtained by probing the relevant DAC output line and passing Gaussian 
 \end{figure}
 
 \subsubsection{Frequency Correction}
+After crossover filtering, each signal for the tweeter and woofer will typically be subjected to signal processing in an attempt to compensate for undesirable effects caused by the characteristics of each driver.
+This is traditionally achieved using analogue circuitry; however, in order to reduce component count, an attempt was made to perform this processing using a custom IIR filter class (\lstinline{IIRFilter}).
+A UML class diagram for the \lstinline{IIRFilter} can be seen in the following listing .......
+
+
+\medskip
+The class calculates the filter coefficients during object construction for the specified filter type using equations derived using a Butterworth analogue prototype transfer function and digitising it using the Bilinear transform;
+an example derivation can be seen by Bristow-Johnson at \cite{biquad-cookbook}.
+The filter implementation was written using a Direct Form I biquad topology, two dual sample buffers are used to as delay lines to multiply fed-forward and fed-back samples by the relevant coefficients.
+The $a_0$ coefficient is simply used as an attenuation factor for the output accumulator.
+A block diagram of the biquad filter can be seen in figure \ref{fig:biquad}
+\begin{figure}[H]
+    \centering
+    \begin{signalflow}{}
+        % - delay element
+        \begin{scope}
+            \node [input] (in) {$x(n)$};
+            \node [node] (node1) [right from=in] {};
+            \node [multiplier] (b0) [right from=node1] {\nodepart{above}{$b_0$}};
+            \node [adder]  (accum) [right from=b0]  {$\Sigma$};
+            \node [delay] (del1) [below from=node1, fill=lightgray] {$T$};
+            \node [multiplier] (b1) [below from=b0] {\nodepart{above}{$b_1$}};
+            \node [delay] (del2) [below from=del1, fill=lightgray] {$T$}; 
+            \node [multiplier] (b2) [below from=b1] {\nodepart{above}{$b_2$}};
+            \node [adder] (accumFF) [below from=accum] {$\Sigma$};
+            \node [adder] (accum2) [right from=accum] {$\Sigma$};
+            \node [node] (node0) [right from=accum2, fill=white, draw=white] {};
+            \node [node] (node2) [right from=node0] {};
+            \node [adder] (accumFB) [below from=accum2] {$\Sigma$};
+            \node [multiplier] (a1) [right from=accumFB] {\nodepart{above}{$a_1$}};
+            \node [delay] (del3) [below from=node2, fill=lightgray] {$T$}; 
+            \node [multiplier] (a2) [below from=a1] {\nodepart{above}{$a_2$}};
+            \node [delay] (del4) [below from=del3, fill=lightgray] {$T$};    
+            \node [output] (out) [right from=node2] {$y(n)$};
+
+            % signal paths
+            \path[r] (in)  -- (node1);
+            \path[r>] (node1)  -- (b0);
+            \path[r>] (b0)  -- (accum);
+            \path[r>] (node1) -- (del1);
+            \path[r>] (del1) -- (del2);
+            \path[r>] (del1) -- (b1);
+            \path[r>] (b1) -- (accumFF);
+            \path[r>] (del2) -- (b2);
+            \path[r>] (b2) -| (accumFF);
+            \path[r>] (accumFF) -- (accum);
+            \path[r>] (accum) -- (accum2);
+            \path[r>] (node2) -- (del3);
+            \path[r>] (del3) -- (del4);
+            \path[r>] (del3) -- (a1);
+            \path[r>] (del4) -- (a2);
+            \path[r>] (a1) -- (accumFB);
+            \path[r>] (a2) -| (accumFB);
+            \path[r>] (accumFB) -- (accum2);            
+            \path[r] (accum2) -- (node2);
+            \path[r>] (node2) -- (out);
+        \end{scope}
+    \end{signalflow}
+    \caption{Direct Form I Biquad IIR Filter}
+    \label{fig:biquad}
+\end{figure}
+
+\medskip
+A notch filter is normally implemented on the high frequency signal to counteract the tweeters resonant frequency, this is traditionally done using either an active or passive bandstop circuit.
+An instantiated \lstinline{IIRFilter} object configured as a bandstop filter is used as an alternative to an analogue solution, the filter coefficients are calculated during construction using the following equations.
+
+\begin{center}
+\noindent\begin{minipage}{.3\linewidth}
+    \begin{equation*}
+        \begin{aligned} 
+            &a_0 = 1 + \alpha \\
+            &a_1 = -2cos(\omega _0) \\
+            &a_2 = 1 - \alpha
+        \end{aligned}
+    \end{equation*}
+    \end{minipage}%
+    \begin{minipage}{.3\linewidth}
+    \begin{equation*}
+        \begin{aligned}
+            &b_0 = 1 \\
+            &b_1 = -2cos(\omega _0) \\
+            &b_2 = 1 
+        \end{aligned}
+    \end{equation*}
+\end{minipage}
+\end{center}
+
+\medskip
+A zobel network, a series resistor and capacitor, is normally placed in parallel with the woofer to counteract the impedance rise at higher frequencies caused by the driver's voice-coil inductance. 
+In an effort to reduce the rising frequency towards the crossover, a high shelve \lstinline{IIRFilter} object with an attenuation of -12dB was used, the filter coefficients are calculated during construction using the following equations, 
+where $A = \sqrt{10^{\frac{dBgain}{20}}}$ .
+
+\begin{center}
+    \begin{minipage}{.5\linewidth}
+        \begin{equation*}
+            \begin{aligned} 
+                &a_0 = (A + 1) - (A - 1)cos(\omega_ 0) + 2\sqrt{A} \alpha \\
+                &a_1 = 2((A - 1) - (A + 1)cos(\omega_ 0)) \\
+                &a_2 = (A + 1) - (A - 1)cos(\omega_ 0) - 2\sqrt{A} \alpha
+            \end{aligned}
+        \end{equation*}
+        \end{minipage}%
+        \begin{minipage}{.5\linewidth}
+        \begin{equation*}
+            \begin{aligned}
+                &b_0 = A((A + 1) + (A - 1)cos(\omega _0) + 2\sqrt{A} \alpha) \\
+                &b_1 = -2A((A - 1) + (A + 1)cos(\omega _0)) \\
+                &b_2 = A((A + 1) + (A - 1)cos(\omega_ 0) - 2\sqrt{A} \alpha)
+            \end{aligned}
+        \end{equation*}
+    \end{minipage}
+    \end{center}
+
+\medskip 
+
+
 \subsubsection{3-Band EQ}
 \subsubsection{Results}
 \subsection{ALSA Interface}
