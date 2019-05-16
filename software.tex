@@ -73,16 +73,6 @@ A raw streaming protocol could be implemented at a low level or, a sound server 
 \medskip
 %PulseAudio & JACK
 
-\subsubsection{Multicast Audio Streaming Toolkit (MAST)}
-
-\subsubsection{Linphone: Media Streamer 2}
-
-\subsubsection{PulseAudio Audio Server}
-
-\subsubsection{oRTP}
-
-\subsubsection{JACK/netJACK Audio Server}
-
 \subsection{System Architecture}
 \begin{figure}[H]
     \centering
@@ -123,16 +113,21 @@ A raw streaming protocol could be implemented at a low level or, a sound server 
     \label{fig:JACKclients}
 \end{figure}
 
-\section{System Startup/Shutdown}
-
+\pagebreak
 \section{WifiHifi Client}
 \subsection{Overview}
 %threads, class hierarchy etc
+The client was written using the QtJack library, a C++ wrapper for the JACK C API that allows integration with the Qt multitasking environment.
+On startup, a JACK server with the ``net'' backend is launched before the client is activated\footnote{registered by the server}, the client is created and connected to the server.
+The top level classes (instantiated in \lstinline{main()}) are then created and referenced to the appropriate classes before all threads and the Qt executive are started.
+
+\medskip
+The system runs two main threads, the receiver thread that simply receives audio from the the server before writing it to a ring-buffer, and a dedicated processing thread that performs necessary DSP and outputs the audio to hardware.
+A separate thread is used for processing such that the processing can continue to run without being interrupted by the server, a drift correction algorithm, discussed in more detail later, and a wait condition, in the processing thread, are used to ensure that both streams remain aligned.
 A UML class diagram can be seen in figure \ref{fig:client-uml}.
 \def \xval {5}
 \def \yval {-6}
 \def \scaleuml {0.75}
-djfwbfiwebfiuw \xval
 \begin{figure}[H]
     \centering
     \begin{tikzpicture}[scale=0.4, every node/.style={scale=1}]
@@ -171,9 +166,9 @@ djfwbfiwebfiuw \xval
                 pop\textunderscore front() \\
                 push\textunderscore back()
             }
-            \umlsimpleclass[x=0,y=2*\yval, scale=\scaleuml, type=class]{IIRFilter}
-            \umlsimpleclass[x=0,y=3*\yval, scale=\scaleuml, type=class]{FIRFilter}
-            \umlsimpleclass[x=1.5*\xval,y=3*\yval, scale=\scaleuml, type=class]{Fir1}
+            \umlsimpleclass[x=0,y=4*\yval, scale=\scaleuml, type=class]{IIRFilter}
+            \umlsimpleclass[x=1.5*\xval,y=4*\yval, scale=\scaleuml, type=class]{FIRFilter}
+            \umlsimpleclass[x=3*\xval,y=4*\yval, scale=\scaleuml, type=class]{Fir1}
             \umlclass[x=2.5*\xval,y=2.5*\yval, fill=red!20, scale=\scaleuml, type=class]{AlsaWorker}{}
             {
                 Work() \\
@@ -183,6 +178,11 @@ djfwbfiwebfiuw \xval
                 AdjustBass() \\
                 EnableEQ() \\
                 DisableEQ() 
+            }
+
+            \umlclass[x=0,y=2.5*\yval, fill=orange!30, scale=\scaleuml, type=class]{ClientController}{}
+            {
+                readyRead()
             }
 
             %connections
@@ -198,18 +198,155 @@ djfwbfiwebfiuw \xval
             \umlcompo{Fir1}{FIRFilter}
             \umldep{AlsaController}{asoundlib}
             \umldep{HardwareController}{wiringPi} 
+            \umlaggreg{ClientController}{AlsaWorker}
+
         \end{umlpackage}
     \end{tikzpicture}
     \caption{UML Collaboration/Class Diagram of WifiHifi JACK Client}
     \label{fig:client-uml}
 \end{figure}
 
+\subsection{JACK Interface}
+To interface the client software with JACK, the \lstinline{SlaveProcessor} class was written that contains an asyncronous callback \lstinline{process()} that is used by the server to notify when a buffer of samples has been delivered to the client's input ports.
+When called, the \lstinline{SlaveProcessor} reads this from the input port's buffer and immediately writes all samples to the tail of a ring-buffer.
+One of the GPIO pins is also toggled, this is used for debugging to determine if a callback has been missed.
+Callbacks should be called by the server at a rate determined by the following equation where $N$ and $f_{s}$ represent the buffer size and sample rate respectively.
+\begin{equation}
+T_{callback} = \frac{N}{f_{s}}
+\end{equation}   
+
+Both the sample rate and buffer size are determined by the server configuration on the master device (user's PC), it is recommended that these be set to 44.1kHz and $\geq$4096 for sampling rate and buffer size respectively for normal operation.
+The \lstinline{SlaveProcessor} takes a reference to the Client in its constructor, it can therefore determine both the sample rate and buffer size allowing other classes in the client to query this information through the \lstinline{SlaveProcessor} by calling its relevant public methods.
+
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}
+        \umlclass[scale=0.75]{WifiHifi::AlsaWorker}
+        {  
+        + boost::circular\textunderscore buffer : ringBuffer \\
+        - QtJack::AudioPort : in \\
+        - Qmutex : mutex
+        }
+        {
+        SlaveProcessor(QtJack::Client\&) \\
+        \char`\~ SlaveProcessor() \\
+        + EQSettings() : threeBand\textunderscore t \\
+        + process(int) : void \\ 
+        + bufferSize() : int \\
+        + sampleRate() : int \\
+        + bitDepth() : int 
+        }
+
+    \end{tikzpicture}
+    \caption{SlaveProcessor UML Class Diagram}
+    \label{fig:alsa-uml}
+\end{figure}
+
+\subsection{ALSA Interface}
+The client utilises the ALSA API as a means to write the audio stream to hardware.
+Since the 1st generation PCB utilised the PCM5102A ,the same DAC from the phatDAC audio evaluation board, the device's audio was reconfigured from its default audio interface to the I2S interface using the phatDAC's device tree\cite{phatDAC-tree}.
+This device tree simply reconfigures for I2S output over the relevant RPI pins, this meant that it could be used with the 2nd generation board as well.
+
+\medskip
+ALSA configuration/setup and the write method are contained within the \lstinline{AlsaController} class, this aims to abstract the ALSA API from other classes.
+On construction, setup configuration is performed by setting relevant parameters such as the sample rate, buffer size and buffer access type.
+The \lstinline{WriteInterleaved()} method is used to write an interleaved buffer of samples to the DAC, if the initial write fails (i.e. an over-run or under-run occurs) then an attempt is made to recover by resetting the device using the \lstinline{RecoverXRuns} method.
+The class also contains methods to rewind the stream (\lstinline{Rewind()}) and query the number of samples available for ALSA to write for the current cycle(\lstinline{FramesReady()}).
+
+\medskip
+The class \lstinline{AlsaWorker()} is run in a dedicated thread and performs the intensive signal processing, synchronises the outbound and inbound audio streams, and writes to the output.
+It's main routine, \lstinline{Work()}, is synchronised to the receiver thread using a wait condition that blocks the thread until the receiver has notified that it has completed writing all samples to the ring-buffer.
+This ensures that no buffer xruns occur due to the processing thread (ALSA) running ahead of the receiver (JACK). A UML class diagram of the ALSA related classes can be seen in figure \ref{fig:alsa-uml}.
+
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}
+        \umlclass[scale=0.75]{WifiHifi::AlsaWorker}
+        {  
+        - FIRFilter* : firWoof \\
+        - FIRFilter* : firTweet \\
+        - IIRFilter* : midEq \\
+        - IIRFilter* : bassEq \\
+        - IIRFilter* : trebleEq \\
+        - IIRFilter* : notchCorrection \\
+        - IIRFilter* : zobelCorrection \\
+        - AlsaController* : dac \\
+        - int64\textunderscore t* : alsaBuffer \\
+        - SlaveProcessor* : processor \\
+        - double* : integDeltaK \\
+        - double* : resampleMean \\
+        - double* : smoothBuffer \\
+        - float : atten \\
+        - bool : eqEnabled
+        }
+        {
+        AlsaWorker(QtJack::Client\&, SlaveProcessor*) \\
+        \char`\~ FIRFilter() \\
+        + EQSettings() : threeBand\textunderscore t \\
+        + AdjustMid(filterConfig\textunderscore t) : double \\ 
+        + AdjustBass(filterConfig\textunderscore t) : void \\
+        + AdjustTreble(filterConfig\textunderscore t) : void \\
+        + EnableEQ() : void \\
+        + Attenuate() : void\\
+        + Work() \\
+        - DriftCorrection() : int \\
+        - HighpassCoeffs(int, double) : bool \\
+        - AllpassCoeffs(int) : bool
+        }
+
+        \umlclass[x=7.5, y=0, scale=0.75]{WifiHifi::AlsaController}
+        { 
+        - snd\textunderscore pcm\textunderscore hw\textunderscore params\textunderscore t* : hwParams \\
+        - snd\textunderscore pcm\textunderscore t* : playbackHandle \\
+        - unsigned int : periodSize  \\
+        - unsigned int : sampleRate     
+        }{
+        AlsaController(QtJack::Client\&, const char*) \\
+        \char`\~ AlsaController() \\
+        + WriteInterleaved(double) : double \\ 
+        + FramesReady() : uint32\textunderscore t \\
+        + Rewind(uint32\textunderscore t) : bool \\
+        - RecoverXRuns(int)) : bool 
+
+        }
+
+        \umlunicompo[geometry=-|]{WifiHifi::AlsaController}{WifiHifi::AlsaWorker}
+    \end{tikzpicture}
+    \caption{FIRFilter UML Class Diagram}
+    \label{fig:alsa-uml}
+\end{figure}
+
+\medskip
+Two copies of each sample are processed separately before being interleaved and written, these are interleaved in a single output buffer.
+By default, the Netjack interface encodes all samples as 32-bit floating point, the output buffer is therefore allocated as a 64-bit array the size of which is determined by the buffer size configuration of the master JACK server.
+The least significant 32 bits contain the sample to be sent to the woofer, the most significant 32 bits are the sample to be sent to the tweeter. 
+The PCM5102A does not support floating point audio, the samples are therefore scaled to 32-bit, arranged into a single sample, and placed into the buffer. 
+This buffer is then referenced to the \lstinline{AlsaController::WriteInterleaved()} method, outputting the samples over the I2S interface.
+This can be seen in the following listing.
+
+\begin{lstlisting}[language=c++, caption={Interleaving Tweeter/Woofer Stream}]
+        leftSample32 = static_cast<int64_t>(leftSample*0x10000000);
+        leftSample32 = leftSample32 & 0x00000000FFFFFFFF;
+        rightSample32 = static_cast<int64_t>(rightSample*0x10000000);
+        rightSample32 = rightSample32 << 32;
+        rightSample32 = rightSample32 & 0xFFFFFFFF00000000; 
+        currentSample = rightSample32 | leftSample32;                           
+        m_alsaBuffer[pos] = currentSample;
+    }
+    if ( !m_dac->WriteInterleaved(m_alsaBuffer, newBuffSize) )
+    {
+        /* fatal, can't recover from xruns */
+        cout << "ALSA WORKER: failed to write to device" << endl;
+        exit(1);
+    }
+\end{lstlisting}
 
 
-\subsection{Signal Processing}
+
+\section{Signal Processing}
 In order to reduce electronic component count, DSP has been used to implement signal processing tasks that would typically be achieved using analogue circuitry.
 These include the crossover filters, frequency correction circuitry and tone controls.
-\subsubsection{Crossover Filters}
+\subsection{Crossover Filters}
 A two-way crossover circuit is typically used to split the high and low frequencies between the tweeter and woofer respectively around a common crossover frequency using highpass and lowpass filters;
 the specific value of this crossover frequency is chosen based on the frequency response of each driver.
 As can be seen in figure \ref{fig:tweeter-response}, the resonant frequencies of the tweeter is approximately 1.5kHz.
@@ -315,7 +452,7 @@ They were obtained by probing the relevant DAC output line and passing Gaussian 
     \label{fig:woofer-fft}
 \end{figure}
 
-\subsubsection{Frequency Correction}
+\subsection{Frequency Correction}
 After crossover filtering, each signal for the tweeter and woofer will typically be subjected to signal processing in an attempt to compensate for undesirable effects caused by the characteristics of each driver.
 This is traditionally achieved using analogue circuitry; however, in order to reduce component count, an attempt was made to perform this processing using a custom IIR filter class (\lstinline{IIRFilter}).
 A UML class diagram for the \lstinline{IIRFilter} can be seen figure \ref{fig:iir-uml}.
@@ -457,33 +594,191 @@ where $A = \sqrt{10^{\frac{dBgain}{20}}}$ .
 \medskip 
 
 
-\subsubsection{3-Band EQ}
-\subsubsection{Results}
-\subsection{ALSA Interface}
-% interleaving etc
-\subsection{User I/O}
+\subsection{3-Band EQ}
+Standard 3-band tone controls were added through an application that runs on the user's PC.
+The bass, mid and treble values are sent from the source PC via multicast UDP, this ensures that each speaker receives the new EQ values.
+The class \lstinline{ClientController} runs in a dedicated thread and simply listens for incoming UDP packets. 
+Each relevant message is prefixed with a letter (eg. `M' for mid), the \lstinline{ClientController} parses these messages and calls methods from the \lstinline{AlsaWorker} to adjust the EQ.
+It can also parse volume change requests and use either the \lstinline{HardwareController} to change the volume by writing the MAX9744ETH+T's volume register, or attenuating the software sample. 
 
-\section{Drift Correction}
+\medskip
+The EQ is implemented through three cascaded, variable gain IIR biquad filters, the \lstinline{IIRFilter()} class explained in the previous section was used. 
+The control of bass, mid and treble is achieved through varying the gain of a low shelve, peak, and high shelve filter respectively. 
+The maximum value for each filter is 0dB, as the relevant control is decreased, the gain of each band is decreased from 0dB to -15dB. 
+The quality factor (Q) and centre frequency are fixed and set as $\frac{1}{\sqrt{2}}$ and 1kHz respectively.
+
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}
+        \umlclass[x=0, y=-1]{WifiHifi::ClientController}{  
+        - QPointer<<QUdpSocket>> : socket \\
+        - AlsaWorker* : alsa \\
+        - bool : eqOn \\
+        - int* : dbVols
+        - HardwareController* : hw
+        }{
+        ClientController(HardwareController*, AlsaWorker*) \\
+        \char`\~ ClientController() \\
+        + readyRead() : void 
+        }
+
+        \umlsimpleclass[x=9, y=0]{WifiHifi::HardwareController}
+        \umlsimpleclass[x=9, y=-2]{WifiHifi::AlsaWorker}
+
+        \umlaggreg[geometry=--]{WifiHifi::AlsaWorker}{WifiHifi::ClientController}
+        \umlaggreg[geometry=--]{WifiHifi::HardwareController}{WifiHifi::ClientController}
+
+    \end{tikzpicture}
+    \caption{FIRFilter UML Class Diagram}
+    \label{fig:fir-uml}
+\end{figure}
+
+% interleaving etc
+\section{Hardware Interface and User I/O}
+
+
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}
+        \umlclass{WifiHifi::HardwareController}{  
+        - dbVols : int* \\
+        - vol : int \\
+        - downFlag : IIRCoeffs\textunderscore t* \\
+        - timer : QPointer<<QTimer>> 
+        }{
+        HardwareController() \\
+        \char`\~ HardwareController() \\
+        \underline{+ VolumeUpISR() : void} \\ 
+        \underline{+ VolumeDownISR() : void} \\ 
+        \underline{+ PowerOffISR() : void} \\ 
+        \underline{+ SetVolume() : void} \\
+        \underline{+ GetVolume() : int} \\ 
+        - PowerTimeout() : void 
+        }
+    \end{tikzpicture}
+    \caption{HardwareController UML Class Diagram}
+    \label{fig:iir-uml}
+\end{figure}
+
+\pagebreak
+
+\section{Synchronisation}
 \subsection{Overview}
-%describe algorithm/maths
-\subsection{Implementation}
-\subsection{Results}
+It was noticed during initial testing that audio would stutter for a prolonged period of time (approximately five seconds) before resuming normal playback.
+This was found to be caused for two reasons.
+Firstly, due to the JACK server being entirely decoupled from the ALSA output stream (processing thread), the sound-card was, in effect, running at a marginally different rate from the audio server.
+Secondly, the \lstinline{SlaveProcessor::process()} callback would fail to be called by the server on some occasions, this would cause the entire audio stream to drop out for the cycles elapsed until the server would resume delivering audio.
+
+\subsection{Drift Correction}
+\medskip
+The JACK server waits in the current process cycle until it receives a sync packet from the master JACK server on the user's PC, this ensures that each server is in sync for a given cycle.
+From this, it can be concluded that by synchronising the output stream (the processing thread) of each speaker with its local server, each speaker is synchronised to the master server and thus, each other.
+
+\medskip
+Drift correction is performed in the processing thread before reading from the output buffer;
+this involves determining how many samples the output stream is out of sync with the server and applying PI control to resize the output buffer, compensating for running either behind or ahead of the server.
+A block diagram of the PI controller can be seen in figure \ref{fig:pi-controller}.
+
+\begin{figure}[H]
+    \centering
+    \begin{signalflow}{}
+        % - delay element
+        \begin{scope}
+            \node [input] (jack-written) {$N_{j}(n)$};
+            \node [adder] (sum1) [right from=jack-written] {};
+            \node [input] (alsa-written) [above from=sum1] {\nodepart{above}{$N_{a}(n)$}};
+            \node [node] (node1) [right from=sum1] {};
+            \node [node] (node0) [right from=node1, fill=white, draw=white] {};
+            \node [delay] (integ) [below from=node0, fill=yellow!20] {$\int$}; 
+
+            \node [delay] (Ki) [right from=integ, fill=yellow!20] {$K_{i}$}; 
+            \node [multiplier] (neg1) [right from=Ki] {\nodepart{below}{-1}};
+
+            \node [delay] (Kp) [right from=node0, fill=yellow!20] {$K_{p}$}; 
+            \node [multiplier] (neg2) [right from=Kp] {\nodepart{above}{-1}};
+
+            \node [adder] (sum2) [right from=neg2] {};
+            \node [delay] (buffer-size) [right from=sum2, fill=yellow!20] {$M_{buff}$};
+            \node [output] (out) [right from=buffer-size] {$N_{new}$};
+            \node [input] (setpoint) [above from=sum2] {\nodepart{above}{$1$}};
+
+            \path[r>] (jack-written)  -- (sum1);
+            \path[r>] (alsa-written)  -- (sum1);
+            \path[r] (sum1)  -- (node1);
+            \path[r>] (node1)  -- (Kp);
+            \path[r>] (Kp)  -- (neg2);
+            \path[r>] (neg2)  -- (sum2);
+            \path[r>] (sum2)  -- (buffer-size);
+            \path[r>] (buffer-size)  -- (out);
+
+            \path[r>] (node1)  |- (integ);
+            \path[r>] (integ)  -- (Ki);
+            \path[r>] (Ki)  -- (neg1);
+            \path[r>] (neg1)  -| (sum2);
+            \path[r>] (setpoint)  -- (sum2);
+
+        \end{scope}
+    \end{signalflow}
+    \caption{Drift Correction PI Controller}
+    \label{fig:pi-controller}
+\end{figure}
+
+In the situation that the output stream is very out of sync with the server, then the drift correction will force the the stream into sync using the \lstinline{AlsaController}.
+The tolerance in which the stream may jitter is set at 256 samples for either rushing ahead, or lagging behind.
+If the output stream is detected to have rushed ahead of the server by the tolerance, the playback is rewound.
+If the output stream is detected to have lagged behind of the server by the tolerance, a temporary buffer of 256 samples is immediately written to force the stream to ``catch up'' with the server. 
+This can be seen in the following listing, note that an FIR filter is reset, this is because the raw offset is smoothed. 
+
+\begin{lstlisting}[language=c++, caption={Hard Rewind or Buffer Padding for Unsynchronised Streams}]
+    if (offset < rushTolerance)
+    {
+        /* ALSA is running ahead so force a rewind */
+        m_dac->Rewind(-1*deltaK);
+        m_driftFilter->reset();
+        m_integDeltaK = - (m_resampleMean - 1.0) * (1 / K) * (1 / Ki);
+        std::cout << "ALSA IS RUSHING" << std::endl;
+    }
+    if (offset > dragTolerance)
+    {
+        /* ALSA is lagging behind so pad a temporary buffer and write */
+        while (offset > 0) 
+        {
+	        to_write = (offset > 512) ? 512 : offset;
+            m_dac->WriteInterleaved(m_padBuffer, static_cast<int>(to_write));
+	        offset -= to_write;  
+	    }
+        m_driftFilter->reset();
+        m_integDeltaK = - (m_resampleMean - 1.0) * (1 / K) * (1 / Ki);  
+    }
+\end{lstlisting}
+It is generally more favourable for the output stream to lag a little behind the server rather than rushing ahead, this is because a rewind is much more noticeable than padding a buffer for 256 samples.
+It was found that the controller would work reasonably well with the offset very gradually reaching the dragging tolerance, when the stream was forced back into sync through padding, it was not noticeable to the human ear.
+The proportional gain, $K_p$ was set at $\frac{1}{100000}$ and the integral gain, $K_i$, set at $\frac{1}{10000}$.
+The integral term was set as the dominant term as the controller was found to work best acting mostly on the accumulated error, this is because the output streams falls out of sync slowly.
+
+\subsection{Missed Process Callbacks}
+
+\begin{figure}[H]
 \begin{tikzpicture}
     \begin{axis}[
         width=\textwidth, 
         height=\axisdefaultheight, 
-        xtick={0,1,...,10},
+        xtick={0,0.1,...,1},
         xmin=0,
-        xmax=10]
+        xmax=1,
+        ytick ={0, 1},
+        ymax = 1.5,
+        restrict x to domain*=0:1,
+        restrict y to domain*=0:1,]
     %\addplot table [mark=none, x=t, y=a, col sep=comma] {./data/saleae-outputs/sync.csv};
     
-    \addplot table [mark=none, x=t, y=b, col sep=comma] {./data/saleae-outputs/run1.csv};
+    \addplot table [mark=none, x=t, y=b, col sep=comma] {./data/saleae-outputs/run2.csv};
     \end{axis}
 \end{tikzpicture}
+\end{figure}
 
 \section{Desktop Application}
 \subsection{Overview}
-\subsection{Tone Controls}
-\subsection{Connection Protocol}
+\subsection{Controls}
 
 \end{document}
