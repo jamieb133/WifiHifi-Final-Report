@@ -1,5 +1,12 @@
 \providecommand{\main}{..}
 \documentclass[main.tex]{subfiles}
+\input{wifihifi.tikzstyles}
+\begin{comment}
+\pgfdeclarelayer{nodelayer}
+\pgfdeclarelayer{edgelayer}
+\pgfdeclarelayer{connections}
+\pgfsetlayers{edgelayer,nodelayer,connections,activity,lifelines,main}
+\end{comment}
 
 \begin{document}
 \chapter{Software Design}
@@ -79,8 +86,39 @@ A raw streaming protocol could be implemented at a low level or, a sound server 
 \subsection{System Architecture}
 \begin{figure}[H]
     \centering
-    \includegraphics[scale=0.4]{./figs/JACKclients.pdf}
+    \begin{tikzpicture}
+        \begin{umlpackage}{Speaker A}
+            \umlsimpleclass{ALSA/I2S Interface A}
+            \umlsimpleclass[x=0, y=-1.5]{WifiHifi Client A}
+            \umlsimpleclass[x=0, y=-3]{Netjack Server A}
+
+            \umluniassoc{WifiHifi Client A}{ALSA/I2S Interface A}
+            \umluniassoc{Netjack Server A}{WifiHifi Client A}        
+        \end{umlpackage}
+        
+        \begin{umlpackage}[x=7, y=0]{Speaker B}
+            \umlsimpleclass{ALSA/I2S Interface B}
+            \umlsimpleclass[x=0, y=-1.5]{WifiHifi Client B}
+            \umlsimpleclass[x=0, y=-3]{Netjack Server B}
     
+            \umluniassoc{WifiHifi Client B}{ALSA/I2S Interface B}
+            \umluniassoc{Netjack Server B}{WifiHifi Client B}        
+        \end{umlpackage}
+
+        \begin{umlpackage}[x=2, y=-7]{User Device}
+            \umlsimpleclass[x=1.5]{Master JACK Server}
+            \umlsimpleclass[x=0, y=-1.5]{Client App 1}
+            \umlsimpleclass[x=4, y=-1.5]{Client App 2}
+
+            \umluniassoc{Client App 1}{Master JACK Server}    
+            \umluniassoc{Client App 2}{Master JACK Server}        
+        \end{umlpackage}
+
+        \umldep[geometry=|-|, name=dep]{User Device}{Speaker A}
+        \umldep[geometry=|-|]{User Device}{Speaker B}
+        \umlnote[x=9.5, y=-5]{dep-1}{UDP Network Transport}
+
+    \end{tikzpicture}
     \caption{High-level JACK-based system diagram}
     \label{fig:JACKclients}
 \end{figure}
@@ -90,6 +128,84 @@ A raw streaming protocol could be implemented at a low level or, a sound server 
 \section{WifiHifi Client}
 \subsection{Overview}
 %threads, class hierarchy etc
+A UML class diagram can be seen in figure \ref{fig:client-uml}.
+\def \xval {5}
+\def \yval {-6}
+\def \scaleuml {0.75}
+djfwbfiwebfiuw \xval
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[scale=0.4, every node/.style={scale=1}]
+        \begin{umlpackage}[fill=creamy]{WifiHifi Client}
+            %declare classes/packages
+            \umlclass[x=0, y=\yval, scale=\scaleuml, type=class]{AlsaController}{}
+            {
+                WriteInterleaved() \\
+                FramesReady() \\
+                Rewind()
+            }
+            \umlsimpleclass[x=0,y=0, scale=\scaleuml, fill=blue!20, type=library]{asoundlib}
+            \umlclass[x=2.5*\xval,y=0.2\yval, scale=\scaleuml, type=class]{HardwareController}{}
+            {
+                SetVolume() \\
+                PowerDownISR() \\
+                VolumeISR()
+            }
+            \umlsimpleclass[x=2.5*\xval,y=0, scale=\scaleuml, type=library, fill=blue!20]{wiringPi}
+            \umlclass[x=5*\xval,y=\yval,fill=green!20, scale=\scaleuml, type=class]{SlaveProcessor}
+            {
+                ringBuffer : boost::ringBuffer
+            }
+            {
+                process() \\
+                bufferSize() \\
+                sampleRate() \\
+                bitDepth()
+            }
+            \umlsimpleclass[x=5*\xval,y=0,fill=green!20, scale=\scaleuml, type=class]{QtJack::Processor}
+            \umlsimpleclass[x=7*\xval,y=0.4*\yval,fill=green!20, scale=\scaleuml, type=class]{QtJack::Server}
+            \umlclass[x=5*\xval,y=2.5*\yval, scale=\scaleuml, type=class]{boost::circularbuffer}
+            {}
+            {
+                front() \\
+                pop\textunderscore front() \\
+                push\textunderscore back()
+            }
+            \umlsimpleclass[x=0,y=2*\yval, scale=\scaleuml, type=class]{IIRFilter}
+            \umlsimpleclass[x=0,y=3*\yval, scale=\scaleuml, type=class]{FIRFilter}
+            \umlsimpleclass[x=1.5*\xval,y=3*\yval, scale=\scaleuml, type=class]{Fir1}
+            \umlclass[x=2.5*\xval,y=2.5*\yval, fill=red!20, scale=\scaleuml, type=class]{AlsaWorker}{}
+            {
+                Work() \\
+                EQSettings() \\
+                AdjustMid() \\
+                AdjustTreble() \\
+                AdjustBass() \\
+                EnableEQ() \\
+                DisableEQ() 
+            }
+
+            %connections
+            \umlaggreg{AlsaController}{AlsaWorker}
+            \umlaggreg{HardwareController}{AlsaWorker}
+            \umlcompo{IIRFilter}{AlsaWorker}
+            \umlcompo{FIRFilter}{AlsaWorker}
+            \umlaggreg{SlaveProcessor}{AlsaWorker}
+            \umlaggreg{boost::circularbuffer}{AlsaWorker}
+            \umlcompo{boost::circularbuffer}{SlaveProcessor}
+            \umlaggreg[geometry=-|]{SlaveProcessor}{QtJack::Server}
+            \umlinherit{SlaveProcessor}{QtJack::Processor}
+            \umlcompo{Fir1}{FIRFilter}
+            \umldep{AlsaController}{asoundlib}
+            \umldep{HardwareController}{wiringPi} 
+        \end{umlpackage}
+    \end{tikzpicture}
+    \caption{UML Collaboration/Class Diagram of WifiHifi JACK Client}
+    \label{fig:client-uml}
+\end{figure}
+
+
+
 \subsection{Signal Processing}
 In order to reduce electronic component count, DSP has been used to implement signal processing tasks that would typically be achieved using analogue circuitry.
 These include the crossover filters, frequency correction circuitry and tone controls.
@@ -119,6 +235,7 @@ A class (\lstinline{FIRFilter}) was written that calculates the coefficients and
 The filter implementation utilises a real-time FIR filter library written by Bernd Porr\cite{fir1} (\lstinline{fir1}), the calculated coefficients are referenced by an instantiated \lstinline{fir1} object that performs the convolution algorithm. 
 A UML class diagram of the \lstinline{FIRFilter} class can be seen in figure \ref{fig:fir-uml}.
 
+%\begin{comment}
 \begin{figure}[H]
     \centering
     \begin{tikzpicture}
@@ -152,6 +269,7 @@ A UML class diagram of the \lstinline{FIRFilter} class can be seen in figure \re
     \caption{FIRFilter UML Class Diagram}
     \label{fig:fir-uml}
 \end{figure}
+%\end{comment}
 
 \medskip
 On object construction, the class will numerically calculate the filter impulse response for the specified filter type and number of coefficents/taps. 
@@ -200,11 +318,36 @@ They were obtained by probing the relevant DAC output line and passing Gaussian 
 \subsubsection{Frequency Correction}
 After crossover filtering, each signal for the tweeter and woofer will typically be subjected to signal processing in an attempt to compensate for undesirable effects caused by the characteristics of each driver.
 This is traditionally achieved using analogue circuitry; however, in order to reduce component count, an attempt was made to perform this processing using a custom IIR filter class (\lstinline{IIRFilter}).
-A UML class diagram for the \lstinline{IIRFilter} can be seen in the following listing .......
+A UML class diagram for the \lstinline{IIRFilter} can be seen figure \ref{fig:iir-uml}.
 
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}
+        \umlclass{WifiHifi::FIRFilter}{  
+        - coeffs : IIRCoeffs\textunderscore t* \\
+        - filterBank : IIRCoeffs\textunderscore t* \\
+        - bankStart :  IIRCoeffs\textunderscore t* \\
+        - sampleRate : int \\
+        - params : filterConfig\textunderscore t \\
+        - outputs : double[2] \\
+        - inputs : double[2]
+        }{
+        <<constructor>> IIRFilter() \\
+        <<destructor>> \char`\~ IIRFilter() \\
+        + filter(double) : double \\ 
+        + update(double) : void \\
+        + CreateFilterBank(filterConfig\textunderscore t) : bool \\
+        + GetParams() : filterConfig\textunderscore t \\
+        - CalcLowShelve(int) : bool \\
+        - CalcHighShelve() : bool \\
+        - CalcPeak() : bool
+        }
+    \end{tikzpicture}
+    \caption{IIRFilter UML Class Diagram}
+    \label{fig:iir-uml}
+\end{figure}
 
-\medskip
-The class calculates the filter coefficients during object construction for the specified filter type using equations derived using a Butterworth analogue prototype transfer function and digitising it using the Bilinear transform;
+The class calculates the filter coefficients during object construction for the specified filter type, gain, cutoff frequency and quality factor using equations derived from a Butterworth analogue prototype transfer function and digitising it using the Bilinear transform;
 an example derivation can be seen by Bristow-Johnson at \cite{biquad-cookbook}.
 The filter implementation was written using a Direct Form I biquad topology, two dual sample buffers are used to as delay lines to multiply fed-forward and fed-back samples by the relevant coefficients.
 The $a_0$ coefficient is simply used as an attenuation factor for the output accumulator.
@@ -218,9 +361,9 @@ A block diagram of the biquad filter can be seen in figure \ref{fig:biquad}
             \node [node] (node1) [right from=in] {};
             \node [multiplier] (b0) [right from=node1] {\nodepart{above}{$b_0$}};
             \node [adder]  (accum) [right from=b0]  {$\Sigma$};
-            \node [delay] (del1) [below from=node1, fill=lightgray] {$T$};
+            \node [delay] (del1) [below from=node1, fill=yellow!20] {$T$};
             \node [multiplier] (b1) [below from=b0] {\nodepart{above}{$b_1$}};
-            \node [delay] (del2) [below from=del1, fill=lightgray] {$T$}; 
+            \node [delay] (del2) [below from=del1, fill=yellow!20] {$T$}; 
             \node [multiplier] (b2) [below from=b1] {\nodepart{above}{$b_2$}};
             \node [adder] (accumFF) [below from=accum] {$\Sigma$};
             \node [adder] (accum2) [right from=accum] {$\Sigma$};
@@ -228,9 +371,9 @@ A block diagram of the biquad filter can be seen in figure \ref{fig:biquad}
             \node [node] (node2) [right from=node0] {};
             \node [adder] (accumFB) [below from=accum2] {$\Sigma$};
             \node [multiplier] (a1) [right from=accumFB] {\nodepart{above}{$a_1$}};
-            \node [delay] (del3) [below from=node2, fill=lightgray] {$T$}; 
+            \node [delay] (del3) [below from=node2, fill=yellow!20] {$T$}; 
             \node [multiplier] (a2) [below from=a1] {\nodepart{above}{$a_2$}};
-            \node [delay] (del4) [below from=del3, fill=lightgray] {$T$};    
+            \node [delay] (del4) [below from=del3, fill=yellow!20] {$T$};    
             \node [output] (out) [right from=node2] {$y(n)$};
 
             % signal paths
