@@ -145,4 +145,105 @@ Placement of components and passives closely followed the recomment layous given
 \section{Testing}
 \subsection{Overview}
 \subsection{Results}
+\begin{figure}[H]
+    \begin{tikzpicture}
+        \begin{axis}[
+            width=\textwidth, 
+            height=\axisdefaultheight,  
+            xlabel={Frequency},
+            ylabel={Gain(dB)},  
+            xmin=0,
+            xmax=20000,     
+        ]
+        %\addplot table [mark=none, x=t, y=a, col sep=comma] {./data/saleae-outputs/sync.csv};
+        
+        \addplot table [mark=none, x=f, y=a, col sep=comma] {./data/csvs/test_001_1.csv};
+        \end{axis}
+    \end{tikzpicture}
+    \caption{Raw FFT of MAX9744 (no input) from Scope}
+    \label{fig:lowpass-fft}
+\end{figure}
+
+\begin{figure}[H]
+    \begin{tikzpicture}
+        \begin{axis}[
+            width=\textwidth, 
+            height=\axisdefaultheight,  
+            xlabel={Frequency},
+            ylabel={Gain(dB)},  
+            xmin=0,
+            xmax=20000,     
+        ]
+        %\addplot table [mark=none, x=t, y=a, col sep=comma] {./data/saleae-outputs/sync.csv};
+        
+        \addplot table [mark=none, x=f, y=a, col sep=comma] {./data/csvs/test_001_3.csv};
+        \end{axis}
+    \end{tikzpicture}
+    \caption{Raw FFT of MAX9744 (1kHz sine input) from Scope}
+    \label{fig:maxim-thd}
+\end{figure}
+
+\begin{figure}[H]
+    \begin{tikzpicture}
+        \begin{axis}[
+            width=\textwidth, 
+            height=\axisdefaultheight,  
+            xlabel={Frequency},
+            ylabel={Gain(dB)},  
+            xmin=0,
+            xmax=20000,     
+        ]
+        %\addplot table [mark=none, x=t, y=a, col sep=comma] {./data/saleae-outputs/sync.csv};
+        
+        \addplot table [mark=none, x=f, y=a, col sep=comma] {./data/csvs/test_001_3.csv};
+        \end{axis}
+    \end{tikzpicture}
+    \caption{Raw FFT of MAX9744 (1kHz sine input) from Scope}
+    \label{fig:maxim-thd}
+\end{figure}
+
+\begin{figure}[H]
+    \begin{tikzpicture}
+        \begin{axis}[
+            width=\textwidth, 
+            height=\axisdefaultheight,  
+            xlabel={Frequency},
+            ylabel={Gain(dB)},  
+            xmin=0,
+            xmax=20000,     
+        ]
+        %\addplot table [mark=none, x=t, y=a, col sep=comma] {./data/saleae-outputs/sync.csv};
+        
+        \addplot table [mark=none, x=f, y=a, col sep=comma] {./data/csvs/test_001_4.csv};
+        \end{axis}
+    \end{tikzpicture}
+    \caption{Raw FFT of PCM5102A (no input) from Scope}
+    \label{fig:dac-fft}
+\end{figure}
+
+\begin{figure}[H]
+    \begin{tikzpicture}
+        \begin{axis}[
+            width=\textwidth, 
+            height=\axisdefaultheight,  
+            xlabel={Frequency},
+            ylabel={Gain(dB)},  
+            xmin=0,
+            xmax=20000,     
+        ]
+        %\addplot table [mark=none, x=t, y=a, col sep=comma] {./data/saleae-outputs/sync.csv};
+        
+        \addplot table [mark=none, x=f, y=a, col sep=comma] {./data/csvs/test_001_5.csv};
+        \end{axis}
+    \end{tikzpicture}
+    \caption{Raw FFT of PCM5102A (1kHz sine input) from Scope}
+    \label{fig:dac-thd}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[scale=0.75]{./figs/TI_THD.eps}        
+    \caption{Raw FFT of TAS5805M (1kHz sine input) from Scope}
+    \label{fig:ti-thd}
+\end{figure}
 \end{document}

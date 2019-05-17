@@ -920,16 +920,15 @@ The integral term was set as the dominant term as the controller was found to wo
     \begin{axis}[
         width=\textwidth, 
         height=\axisdefaultheight, 
-        xtick={0,0.1,...,1},
+        xtick={0,0.01,...,0.2},
         xmin=0,
-        xmax=1,
+        xmax=0.2,
         ytick ={0, 1},
         ymax = 1.5,
-        restrict x to domain*=0:1,
+        restrict x to domain*=0:0.2,
         restrict y to domain*=0:1,]
-    %\addplot table [mark=none, x=t, y=a, col sep=comma] {./data/saleae-outputs/sync.csv};
-    
-    \addplot table [mark=none, x=t, y=b, col sep=comma] {./data/saleae-outputs/run2.csv};
+    \addplot table [mark=none, x=t, y=a, col sep=comma] {./data/saleae-outputs/run2.csv};
+    \addplot table [mark=nane, x=t, y=b, col sep=comma] {./data/saleae-outputs/run2.csv};
     \end{axis}
 \end{tikzpicture}
 \end{figure}
