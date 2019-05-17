@@ -440,16 +440,45 @@ It was calculated using the following equation where $w(n)$, $n$ and $M$ are the
 Figures \ref{fig:tweeter-fft} and \ref{fig:woofer-fft} show plots of FFTs recorded for the highpass and lowpass filters respectively.
 They were obtained by probing the relevant DAC output line and passing Gaussian white noise through the WifiHifi client, all other software filtering was disabled.
 
+\def \minfft{0}
+\def \maxfft{15000}
+
 \begin{figure}[H]
-    \centering
+    \begin{tikzpicture}
+        \begin{axis}[
+            width=\textwidth, 
+            height=\axisdefaultheight,
+            xlabel={Frequency},
+            ylabel={Gain(dB)},
+            xmin=\minfft,
+            xmax=\maxfft,      
+        ]
+        %\addplot table [mark=none, x=t, y=a, col sep=comma] {./data/saleae-outputs/sync.csv};
+        
+        \addplot table [mark=none, x=f, y=a, col sep=comma] {./data/csvs/test_001_1.csv};
+        \end{axis}
+    \end{tikzpicture}
     \caption{FFT of Highpass Crossover Filter}
     \label{fig:tweeter-fft}
 \end{figure}
 
 \begin{figure}[H]
-    \centering
+    \begin{tikzpicture}
+        \begin{axis}[
+            width=\textwidth, 
+            height=\axisdefaultheight,  
+            xlabel={Frequency},
+            ylabel={Gain(dB)},  
+            xmin=\minfft,
+            xmax=\maxfft,     
+        ]
+        %\addplot table [mark=none, x=t, y=a, col sep=comma] {./data/saleae-outputs/sync.csv};
+        
+        \addplot table [mark=none, x=f, y=a, col sep=comma] {./data/csvs/test_001_2.csv};
+        \end{axis}
+    \end{tikzpicture}
     \caption{FFT of Lowpass Crossover Filter}
-    \label{fig:woofer-fft}
+    \label{fig:lowpass-fft}
 \end{figure}
 
 \subsection{Frequency Correction}
@@ -581,13 +610,13 @@ where $A = \sqrt{10^{\frac{dBgain}{20}}}$ .
         \end{equation*}
         \end{minipage}%
         \begin{minipage}{.5\linewidth}
-        \begin{equation*}
+        \begin{equation}
             \begin{aligned}
                 &b_0 = A((A + 1) + (A - 1)cos(\omega _0) + 2\sqrt{A} \alpha) \\
                 &b_1 = -2A((A - 1) + (A + 1)cos(\omega _0)) \\
                 &b_2 = A((A + 1) + (A - 1)cos(\omega_ 0) - 2\sqrt{A} \alpha)
             \end{aligned}
-        \end{equation*}
+        \end{equation}
     \end{minipage}
     \end{center}
 
@@ -600,12 +629,7 @@ The bass, mid and treble values are sent from the source PC via multicast UDP, t
 The class \lstinline{ClientController} runs in a dedicated thread and simply listens for incoming UDP packets. 
 Each relevant message is prefixed with a letter (eg. `M' for mid), the \lstinline{ClientController} parses these messages and calls methods from the \lstinline{AlsaWorker} to adjust the EQ.
 It can also parse volume change requests and use either the \lstinline{HardwareController} to change the volume by writing the MAX9744ETH+T's volume register, or attenuating the software sample. 
-
-\medskip
-The EQ is implemented through three cascaded, variable gain IIR biquad filters, the \lstinline{IIRFilter()} class explained in the previous section was used. 
-The control of bass, mid and treble is achieved through varying the gain of a low shelve, peak, and high shelve filter respectively. 
-The maximum value for each filter is 0dB, as the relevant control is decreased, the gain of each band is decreased from 0dB to -15dB. 
-The quality factor (Q) and centre frequency are fixed and set as $\frac{1}{\sqrt{2}}$ and 1kHz respectively.
+A UML class diagram of the \lstinline{ClientController} can be seen in figure \ref{fig:ClientController-uml}.
 
 \begin{figure}[H]
     \centering
@@ -630,12 +654,87 @@ The quality factor (Q) and centre frequency are fixed and set as $\frac{1}{\sqrt
 
     \end{tikzpicture}
     \caption{FIRFilter UML Class Diagram}
-    \label{fig:fir-uml}
+    \label{fig:ClientController-uml}
 \end{figure}
+
+\medskip
+The EQ is implemented through three cascaded, variable gain IIR biquad filters, the \lstinline{IIRFilter()} class explained in the previous section was used. 
+Each filter has unity gain response unless it is lowered by the user controls, the maximum gain for each filter is 0dB.
+Aas the relevant control is decreased, the gain of each band is decreased from 0dB to -10dB. 
+The quality factor (Q) and centre frequency are fixed and set as $\frac{1}{\sqrt{2}}$ and 1kHz respectively.
+The filter response for each band of the EQ at minimum gain (-10dB) can be seen in figure \ref{fig:eq-reponse}, note that at maximum gain (0dB) the response is unity across the entire spectrum.
+
+\begin{centering}
+\begin{figure}[H]
+    \centering
+    \includegraphics[scale=0.6]{./figs/eq-response.eps}        
+    \caption{Magnitude Response of 3-Band EQ}
+    \label{fig:eq-reponse}
+\end{figure}
+\end{centering}
+
+\medskip
+Control of the bass band is implemented using a low shelve biquad IIR filter; as the bass control is decreased, the gain moves becomes negative and attenuates the frequencies below 1kHz.
+As before, the filter coefficients are calculated in the \lstinline{IIRFilter} constructor, using the following equations for a low shelf.
+
+\begin{center}
+    \begin{minipage}{.5\linewidth}
+        \begin{equation*}
+            \begin{aligned} 
+                &a_0 = (A + 1) + (A - 1)cos(\omega_ 0) + 2\sqrt{A} \alpha \\
+                &a_1 = -2((A - 1) + (A + 1)cos(\omega_ 0)) \\
+                &a_2 = (A + 1) + (A - 1)cos(\omega_ 0) - 2\sqrt{A} \alpha
+            \end{aligned}
+        \end{equation*}
+        \end{minipage}%
+        \begin{minipage}{.5\linewidth}
+        \begin{equation}
+            \begin{aligned}
+                &b_0 = A((A + 1) - (A - 1)cos(\omega _0) + 2\sqrt{A} \alpha) \\
+                &b_1 = 2A((A - 1) - (A + 1)cos(\omega _0)) \\
+                &b_2 = A((A + 1) - (A - 1)cos(\omega_ 0) - 2\sqrt{A} \alpha)
+            \end{aligned}
+        \end{equation}
+    \end{minipage}
+\end{center}
+
+The treble band is implemented using a high shelve biquad IIR filter; as the treble control is decreased, the gain moves becomes negative and attenuates the frequencies above 1kHz.
+Its filter coefficients are calculated using the same equations as the high shelf filter used previously for the woofer correction filter.
+
+\medskip
+Mid band control is achieved through a peaking filter, frequencies around 1kHz are attenuated as the mid control is reduced from 0dB to -15dB.
+The coefficients are calculated using the following equations.
+
+\begin{center}
+    \begin{minipage}{.5\linewidth}
+        \begin{equation*}
+            \begin{aligned} 
+                &a_0 = 1 + \frac{\alpha}{A} \\
+                &a_1 = -2cos(\omega_ 0) \\
+                &a_2 = 1 - \frac{\alpha}{A}
+            \end{aligned}
+        \end{equation*}
+        \end{minipage}%
+        \begin{minipage}{.5\linewidth}
+        \begin{equation}
+            \begin{aligned}
+                &b_0 = 1 + \alpha A) \\
+                &b_1 = 2 - cos(\omega _0) \\
+                &b_2 =1 - \alpha A
+            \end{aligned}
+        \end{equation}
+    \end{minipage}
+\end{center}
+
 
 % interleaving etc
 \section{Hardware Interface and User I/O}
-
+\subsection{Hardware Setup}
+When the client is launched, some initial setup is required to enable audio output.
+This is achieved through interfacing with the hardware using the $I^2C$ protocol and GPIO, the wiringPi library is used to do this.
+This setup has previously been conducted using a separate bash script that would be executed on start-up, this is now being achieved in the main executable, the client.
+Setup code is contained within the constructor of the \lstinline{HardwareController} class, a different version of this was written for the different sound cards.
+A UML class diagram of the \lstinline{HardwareController} class can be seen in figure \ref{fig:hardware-uml}.
 
 \begin{figure}[H]
     \centering
@@ -657,8 +756,36 @@ The quality factor (Q) and centre frequency are fixed and set as $\frac{1}{\sqrt
         }
     \end{tikzpicture}
     \caption{HardwareController UML Class Diagram}
-    \label{fig:iir-uml}
+    \label{fig:hardware-uml}
 \end{figure}
+
+\medskip
+The first generation card uses the PCM5102A DAC and MAX9744ETH amplifier, both of which require initial setup.
+The PCM5102A's mute pin is driven low and the MAX9744ETH's enable pin is driven high to ensure that audio output is enabled.
+The default volume for the MAX9744ETH is set at zero (linear) using $I^2C$.
+
+\medskip
+The second generation card utilises the TAS5805M integrated DAC and amplifier, its initial setup is significantly more complex than the PCM5102A and MAX9744ETH.
+Its enable pin is first driven high using GPIO before additional configuration is set using $I^2C$ for a large number of values and registers.
+To ease this process, the Texas Instruments Pure Path configuration tool was used to generated the required values to set.
+These are represented as a large array of required values and registers in a header file, they are set by simply looping through the entire array and writing over $I^2C$.
+
+\medskip
+A very basic Pure Path configuration was used that includes no use of the hardware DSP filters, the only values that were experimented with were the volume level values.
+A ceiling volume is set as -10dB by writing the volume registers for the right and left channel, software attenuation is used for the second sound-card so the hardware volume level is fixed. 
+Replacing the software DSP with the internal filters of the device to alleviate processor load, and a full investigation into the device's capabilities, is a potential area of future work.
+
+\subsection{Buttons and Switches}
+Three buttons were included to provide basic volume and power-down functionality to the user. 
+The volume buttons will trigger edge triggered interrupts on their GPIO input pins, the interrupt service routines (ISR) will either increase or decrease the volume by a set value until either the minimum or maximum linear value is reached.
+For the first generation card, the maximum and minimum values are 60 and 0 respectively as these are the values accepted by the MAX9744ETH's volume register.
+Conversely, since the second generation card uses software attenuation, these values are 0 and 1.
+
+\medskip
+A master power switch was included that entirely cuts the power to the RPI. 
+To prevent potential corruption of the SD card when the power is immediately removed, a third button was added to power-down the RPI in software.
+The ISR for this button's input starts a five second timer, when the timer expires, if the button is still depressed, the executable exits and the parent bash script calls \lstinline{sudo shutdown now} to power-down the RPI.
+
 
 \pagebreak
 
@@ -779,6 +906,14 @@ The integral term was set as the dominant term as the controller was found to wo
 
 \section{Desktop Application}
 \subsection{Overview}
+\begin{figure}[H]
+    \centering
+    \includegraphics[scale=0.6]{./figs/app-screenshot.pdf}        
+    \caption{Screenshot of WifiHifi Controller Main Window}
+    \label{fig:tweeter-response}
+\end{figure}
 \subsection{Controls}
+
+
 
 \end{document}
