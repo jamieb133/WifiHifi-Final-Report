@@ -5,8 +5,16 @@
 \chapter{Conclusion}
 \section{Project Evaluation}
 The main takeaway from this project is the development of a system which can receive any audio from a computer.
-This has much 
-\section{Further Work}
+This has been successful, and is able to be extended to an arbitrary number of speakers.
+Currently the speaker has to be controlled used the JACK protocol, which is heavily used on Linux but little so on other platforms.
+This was because any work to extend the system to other platforms would have been prohibitively time-consuming.
+This was a trade-off that had to be made in order to realise the system, which allows a big first step full the full ambitions of the system to be realised.
 
+The synchronisation between the speakers was successfully achieved between two speakers, and while it was not tested with additional channels, there is no reason at this point to believe it wouldn't work correctly with further channels.
+
+Although though is no real way to quantifiably measure the audio quality of the speaker, it provides a satisfactory listening performance currently, for quite a modest cost.
+
+\section{Further Work}
+The electronics of the system offer room for possible improvements as the system develops further. By utilising the DSP capabilities of the TAS5805M amplifier the requirements on the companion computer for software filtering may be reduced. For true validation of the system a more comprehensive set of test equipment would also be desired, with signal analysers capable of accurately measuring both the harmonic distortion and noise within a class-d system. If selected for further development it would be highly likely the dual stage DAC/amplifier system would be discarded in favour of the digital input TI package.
 
 \end{document}
