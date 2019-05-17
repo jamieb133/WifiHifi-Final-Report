@@ -14,10 +14,12 @@
 \section{System Design Overview}
 \subsection{Microprocessor Platform}
 The streaming capabilities and digital signal processing requirements of the system necessitated the choice of an appropriate microprocessor platform. 
-A purely embedded solution was initially considered due to the availability of networking stacks such as FreeRTOS+UDP/IP and Light Weight IP (LWIP), the latter of which is available for ARM mbed platforms. This however would have limited audio and networking related software options that are available for general purpose operating systems such as Linux or QNX.
+A purely embedded solution was initially considered due to the availability of networking stacks such as FreeRTOS+UDP/IP and Light Weight IP (LWIP), the latter of which is available for ARM mbed platforms. 
+This however would have limited audio and networking related software options that are available for general purpose operating systems such as Linux or QNX.
 
 \medskip
-As this was the first prototype for the project, the decision was made to select a Linux based platform as this would allow flexibility in the use of audio and streaming tools that are available for the OS. Benchmarking was conducted for potential platforms that would meet the system performance requirements as outlined in chapter 1, they are outlined in table \ref{table:HWPlatforms}.
+As this was the first prototype for the project, the decision was made to select a Linux based platform as this would allow flexibility in the use of audio and streaming tools that are available for the OS. 
+Benchmarking was conducted for potential platforms that would meet the system performance requirements as outlined in chapter 1, they are outlined in table \ref{table:HWPlatforms}.
 
 \begin{table}[H]
     \centering  
@@ -55,12 +57,13 @@ As this was the first prototype for the project, the decision was made to select
 \medskip
 With a single core Broadcom BCM2835 1GHz CPU, 500MB of RAM and no option to implement an eMMC over an SD card, the Raspberry Pi Zero W is significantly under-powered when compared to the other platforms. 
 However, the much reduced cost of the device at approximately £9.00\cite{RpiPrice} is significantly less expensive than its counterparts. The very small size of the board, 65x30mm, was also desirable as it would take up much less space on the master PCB housed within the rear enclosure of the cabinet. 
-The wiringPi library is also compatible with the Raspberry Pi Zero W (RPZW) which would be convenient when interfacing with hardware peripherals such as the DAC, power-amplifier and user controls. The inclusion of a built in WLAN transceiver is particularly advantageous as this removes the need for a separate WLAN module/IC. 
+The wiringPi library is also compatible with the Raspberry Pi Zero W (RPI) which would be convenient when interfacing with hardware peripherals such as the DAC, power-amplifier and user controls. The inclusion of a built in WLAN transceiver is particularly advantageous as this removes the need for a separate WLAN module/IC. 
 
 \medskip
 After careful consideration, this platform was selected due to the reasons outlined above. 
 The chosen Linux distribution was Debian as it is the standard OS for the raspberry pi and allows easier configuration for real-time audio than other popular distributions such as Ubuntu. 
-After the project was completed, further testing was carried out using the Odroid C0 in an attempt to gauge how the increased performance of the platform over the Raspberry Pi affected the performance of the overall system. 
+After the project was completed, an adapter board for the Odroid C0 was manufactured so it could replace the RPI in an attempt to gauge how the increased performance of the platform affected the performance of the overall system.
+This testing did not come to fruition due to the project time-scale, however this is a potential area of future work. 
 
 \subsection{Audio Streaming Platform}
 Several streaming platforms and tools were benchmarked with regards to requirements as outlined in chapter 1. 
@@ -74,6 +77,31 @@ A raw streaming protocol could be implemented at a low level or, a sound server 
 %PulseAudio & JACK
 
 \subsection{System Architecture}
+The local and network audio streaming of the system is driven by Jack servers running on the user PC and each wireless speaker.
+Using Jack allows for many popular audio programs that are Jack compatible, such as VLC media player, to integrate with the system with relative ease.
+This also enables the fundamental use case of this project which is to allow any combination of audio streams to be routed to any combination of speakers.
+
+\medskip
+By running a Jack server with a ``net'' backend on each speaker (Netjack), the system capture port of each speaker is displayed as a standard Jack client with an input port. 
+This is achieved by launching the server at boot for each speaker with the number of input ports set at one.
+ 
+The user must use either the command line or a standard Jack front-end controller, such as QJackCtl for Linux or JackPilot for Mac, to launch the master Jack server. 
+The Jack net manager must then be loaded by calling \lstinline{"jack_load netmanager"}  on the command line, this could however be easily automated using bash scripting.
+Applications can then be connected to individual speakers using either the command line or front-end controller.
+An example illustrating this can be seen in figure \ref{fig:jack-pilot} in which Jack pilot is used to connect left and right stereo outputs from VLC to separate speakers. 
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[scale=0.75]{./figs/jackpilot.pdf}        
+    \caption{Using JackPilot to connect audio streams to speakers}
+    \label{fig:jack-pilot}
+\end{figure}
+
+On the speaker side, the Jack server does not utilise a local sound card, this is because it is using the ``net'' backend which coordinates the audio stream transmitted from the Master server on the user device rather than using a local audio backend such as ALSA.
+A custom Jack client therefore had to be written (WifiHifi Client) that would write to the sound-card directly using a local audio driver, in this project the Advanced Linux Sound Architecture (ALSA) was used to achieve this.
+The client's additional purposes are to perform necessary signal processing, synchronise the output stream to the Jack server, and listen for incoming datagrams from the user desktop app (WifiHifi Controller).
+This can be demonstrated in figure \ref{fig:JACKclients}, a high-level system diagram.
+
 \begin{figure}[H]
     \centering
     \begin{tikzpicture}
@@ -437,8 +465,9 @@ It was calculated using the following equation where $w(n)$, $n$ and $M$ are the
     0.42 + 0.5cos\left(\frac{2\pi n}{M}\right) + 0.08cos\left(\frac{4\pi n}{M}\right)
 \end{equation}
 
-Figures \ref{fig:tweeter-fft} and \ref{fig:woofer-fft} show plots of FFTs recorded for the highpass and lowpass filters respectively.
-They were obtained by probing the relevant DAC output line and passing Gaussian white noise through the WifiHifi client, all other software filtering was disabled.
+Figures \ref{fig:highpass-fft} and \ref{fig:lowpass-fft} show plots of FFTs recorded for the highpass and lowpass filters respectively.
+They were obtained by probing the relevant DAC output with a digital oscilloscope line, passing Gaussian white noise through the WifiHifi client and exporting the data to a csv file;
+all other software filtering was disabled.
 
 \def \minfft{0}
 \def \maxfft{15000}
@@ -451,15 +480,16 @@ They were obtained by probing the relevant DAC output line and passing Gaussian 
             xlabel={Frequency},
             ylabel={Gain(dB)},
             xmin=\minfft,
-            xmax=\maxfft,      
+            xmax=\maxfft, 
+            %xmode=log,     
         ]
         %\addplot table [mark=none, x=t, y=a, col sep=comma] {./data/saleae-outputs/sync.csv};
         
-        \addplot table [mark=none, x=f, y=a, col sep=comma] {./data/csvs/test_001_1.csv};
+        \addplot table [mark=none, x=f, y=a, col sep=comma] {./data/csvs/test_001_10.csv};
         \end{axis}
     \end{tikzpicture}
-    \caption{FFT of Highpass Crossover Filter}
-    \label{fig:tweeter-fft}
+    \caption{Raw FFT of Highpass Crossover Filter from Scope}
+    \label{fig:highpass-fft}
 \end{figure}
 
 \begin{figure}[H]
@@ -474,10 +504,10 @@ They were obtained by probing the relevant DAC output line and passing Gaussian 
         ]
         %\addplot table [mark=none, x=t, y=a, col sep=comma] {./data/saleae-outputs/sync.csv};
         
-        \addplot table [mark=none, x=f, y=a, col sep=comma] {./data/csvs/test_001_2.csv};
+        \addplot table [mark=none, x=f, y=a, col sep=comma] {./data/csvs/test_001_9.csv};
         \end{axis}
     \end{tikzpicture}
-    \caption{FFT of Lowpass Crossover Filter}
+    \caption{Raw FFT of Lowpass Crossover Filter from Scope}
     \label{fig:lowpass-fft}
 \end{figure}
 
@@ -906,13 +936,24 @@ The integral term was set as the dominant term as the controller was found to wo
 
 \section{Desktop Application}
 \subsection{Overview}
+The desktop application, WifiHifi Controller, allows the user to vary the tone controls and volume levels remotely over the local network.
+It was written using the C++ Qt framework, a library for multitasking and GUI applications.
+A screenshot of the main window can be seen in figure \ref{fig:app-screenshot}.
+
 \begin{figure}[H]
     \centering
     \includegraphics[scale=0.6]{./figs/app-screenshot.pdf}        
     \caption{Screenshot of WifiHifi Controller Main Window}
-    \label{fig:tweeter-response}
+    \label{fig:app-screenshot}
 \end{figure}
+
 \subsection{Controls}
+EQ values for each band and volume requests are sent using UDP, they are sent to a single multicast IP address, 239.1.1.1, on port 1234.
+This ensures that all speakers receive the values without requiring to unicast indivdual values to each speaker which would take up more bandwidth.
+When a control is moved by the user, the new value is appended to an outgoing datagram and sent to the multicast address.
+The datagram is prepended with a letter indicated what control the value corresponds to: ``B'' for bass, ``M'' for mid etc.
+Each speaker parses these datagrams and performs the adjustments required.
+
 
 
 

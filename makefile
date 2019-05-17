@@ -1,4 +1,6 @@
 filename=main
+softwarename=software
+electronicsname=electronics
 
 pdf-ps2: ps
 	ps2pdf ${filename}.ps
@@ -27,6 +29,18 @@ pdf:
 	bibtex ${filename}||true
 	pdflatex ${filename}
 	pdflatex ${filename}
+
+software:
+	pdflatex ${softwarename}
+	bibtex ${softwarename}||true
+	pdflatex ${softwarename}
+	pdflatex ${softwarename}
+
+electronics:
+	pdflatex ${electronicsname}
+	bibtex ${electronicsname}||true
+	pdflatex ${electronicsname}
+	pdflatex ${electronicsname}
 
 read:
 	evince ${filename}.pdf &
