@@ -72,14 +72,14 @@ The amplifier stage selection was governed by the desire for low control complex
 
 \subsection{2nd Generation Single-Stage Board}
 
-Selection of the advanced digital input amplifier was made based on its conformance to the previously generated power supply. 
-
 \begin{figure}[H]
     \centering
     \includegraphics[scale=0.75]{./figs/TAS-system.png}
     \caption{Single stage audio system}
     \label{fig:tas-system}
 \end{figure}
+
+For subsequent development of the fully integrated system a digital input amplifier was selected based on its conformance to the project requirements as well as the previously generated power supply. The result of this was the Texas Instruments TAS5805M, a far more modernised IC than those in the dual system, capable of accepting the same $I^S$ signal and $I^2C$ control signal while incorporating a number of DSP capabilities. The produced schematic can be seen in \textit{Figure \ref{fig:tas-circuit}} and worked as desired barring the lack of address-setting resistor due to an error in design.
 
 \begin{figure}[H]
     \centering
@@ -88,9 +88,11 @@ Selection of the advanced digital input amplifier was made based on its conforma
     \label{fig:tas-circuit}
 \end{figure}
 
+Initial configuration of the device was achieved by using the Texas Instruments PurePath Configurator 3 software to generate configuration header files. An array of $I^2C$ addresses and commands was produced providing the required register values and page navigation of the device, .
+
 \section{Power Stage}
 
-To power the system 3 regulated outputs were required. The amplifier power inputs are supplied by a 12V rail, with a maximum driving current of \approx 3.5A (2x20W drivers per board.) A 5V rail was required for the raspberry pi
+To power the system three regulated outputs were required. The amplifier power inputs were supplied by a 12V rail, a 5V rail powered the companion computer, and a final 3.3V supply provided the logic level power for the board ICs. The system was then selected utilising the Texas Instrument Webench power designer prioritising for BOM cost and footprint area. Two TI TPS62135 buck regulating DC/DC converters were chosen to generate the 12V (from unregulated battery power) and 5V high power rails, with a TI TLV70033 LDO regulator provided the low current requirement logic level supply. 
 
 \begin{figure}[H]
     \centering
@@ -99,14 +101,45 @@ To power the system 3 regulated outputs were required. The amplifier power input
     \label{fig:power-system}
 \end{figure}
 
+To avoid the risk presented by mains power regulation the speakers were designed such that the user faced only a 12V $\approx$ 40W power supply sourced from a validated supplier. This was chosen as the XP Power VEL36US120-UK-JA, a generic COTS supply fit for the purpose which, while being rated only for 36W, fit the desired form factor and cost required to be seen as an acceptable risk.
 
-\subsection{Power Stage Design}
+\begin{figure}[H]
+    \centering
+    \includegraphics[scale=1.2]{./figs/power-circuit.PNG}
+    \caption{Power regulation schematic}
+    \label{fig:power-circuit}
+\end{figure}
+
+\subsubsection{Design Considerations}
+
+Although the system design was largely governed by the Webench designer and datasheet applications small changes were made to the system to incorporate good-practice procedures. Power inputs and outputs on each subsystem were decoupled with 100nF transient suppressing capacitors as well as a local bulk capacitance. Any MLCCs (multi-layer ceramic capacitors) used were rated for 25V to reduce their large derating seen around the rated voltage, and extra footprints for bulk capacitance placed around the board. 
 
 \subsection{Battery Power}
 
-\section{Extra circuitry (???)}
+To incorporate the desire for the system to operate in a truly wireless sense circuitry was added to provide for the regulation and selection of a 4-cell lithium battery power supply. A P-type FET placed in series with the regulated battery output switched the supply off based on the insertion of the DC barrel jack providing wall-power, and vice-versa. As the system was only for test and not a requirement of the device protection and charging circuitry was not provided. 
 
 \section{PCB Design}
+
+Schematic capture and PCB design were both produced in Altium's community oriented Circuitmaker software. Components were selected based on their availability at preferred suppliers - namely Onecall - and selected in the design using the platforms OCtopart component database integration. This method allowed for both the use of community generated footprints as well as the generation of supplier specific BOMs for purchasing. 
+
+\subsection{Test Boards}
+To allow for design verification and early testing the audio stages 
+%%%INITITAL TEST PCBS
+
+\subsubsection{Layout}
+
+Placement of components and passives closely followed the recomment layous given in their respective datasheet, with each block placed into its respective audio, power, or debug board regions. 
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[scale=0.4]{./figs/ti-pcb.png}
+    \caption{Single stage board layout}
+    \label{fig:ti-pcb}
+\end{figure}
+
+\subsubsection{Fabrication}
+
+
 
 \section{User I/O}
 \section{Testing}
