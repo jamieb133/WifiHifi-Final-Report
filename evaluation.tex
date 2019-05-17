@@ -4,9 +4,13 @@
 \begin{document}
 \chapter{Conclusion}
 \section{Project Evaluation}
-The main takeaway from this project is the development of a system which can receive any audio from a computer.
-This has much 
-\section{Further Work}
+The main takeaway from this project is the development of a system which can receive any audio from any computer and output multiple streams from different speakers.
 
+\section{Further Work}
+\subsection{Redesign with Custom Microprocessor Platform}
+The system would arguably be more robust with an embedded processor running a Real Time Operating System (RTOS) rather than Linux. 
+This would mean that issues such as missed process callbacks would be much less likely as the scheduler wouldn't be nearly as busy and the process would have much less chance of being interrupted by other processes.
+This would however involve development of a dedicated streaming infrastructure and ensuring that the client side controller/streaming application was compatible with Jack or other suitable sound server.
+Modularity of the system would therefore be maintained with regards to readily available open source audio applications such as VLC and Audacity.
 
 \end{document}
