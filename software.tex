@@ -67,14 +67,25 @@ This testing did not come to fruition due to the project time-scale, however thi
 
 \subsection{Audio Streaming Platform}
 Several streaming platforms and tools were benchmarked with regards to requirements as outlined in chapter 1. 
-With many options under Linux, two potential approaches to implementing streaming were derived. 
-A raw streaming protocol could be implemented at a low level or, a sound server with necessary streaming capabilities and a suitable C++ API could be used in order to distribute multiple streams to different speakers.
+With many options under Linux, two potential approaches to implementing the streaming were derived. 
+A streaming protocol could be implemented at a low level or, a sound server with necessary streaming capabilities and a suitable C++ API could be used in order to distribute multiple streams to different speakers.
 
 \medskip
 %RTAUDIO & oRTP & raw-sockets
+A raw streaming method could be implemented using bespoke libraries designed for audio streaming or through regular socket programming.
+The former could utilise packages such as RtAudio, a library that provides a cross-platform C++ API for streaming audio across Linux, Mac OS and Windows devices.
+The latter would require a low level implementation in which network sockets would be opened to receive incoming datagrams of audio, User Datagram Protocol would likely be most suitable as it is a connectionless protocol, in comparison to Transmission Control Protocol (TCP), and is therefore not as latent.
+A drawback of using these methods is that additional software would have to be written on the client side (user PC) to enable compatibility with other audio applications across operating systems. 
+While this would allow for more flexibility in dealing with issues, such as speaker synchronisation and packet loss, it was decided that in the project time-scale of approximately three months, time would be better spent getting a system functional that could be evaluated for future recommendations and improvements.
 
 \medskip
 %PulseAudio & JACK
+Two Linux based sound servers with the necessary capabilities were considered namely, Jack Audio Connection Kit, and PulseAudio. 
+Jack is a sound server that is designed to allow different audio programs, typically running on a local computer, to share audio with each other.
+The user is able to connect audio streams from different applications that are compliant with Jack together, its main use case has been for professional audio production and thus many Jack compliant programs are Digital Audio Workstations.
+It also features a feature known as Netjack which allows remote servers on a local network to stream audio to one another as though they are regular Jack clients.
+The ability to easily connect different streams from different applications over a local network suited the project's main use case of being able to route multiple channels audio to multiple wireless speakers.
+This is addition to its suitability for low latency applications, were the main reasons Jack was selected as the audio streaming platform. 
 
 \subsection{System Architecture}
 The local and network audio streaming of the system is driven by Jack servers running on the user PC and each wireless speaker.
