@@ -21,10 +21,27 @@ This project therefore aims to create a fully operational multi-channel audio sy
 
 \section{Current Solutions}
 \subsection{RF Tranceivers}
+RF communication can be used to send audio wirelessly, however this would require specialised equipment, and ideally our speakers could be controlled through computers or phones with no extra peripherals required.
+Because of this it is not suitable for our desired application.
 \subsection{Bluetooth}
+Bluetooth is commonly used for wireless audio transmission for personal wireless headphones and small speakers.
+However, due to Bluetooth's low bandwidth, audio has to be compressed in order to be transmitted.
+Also, its range is limited, which would present a problem for home hi-fi use.
+As such, it was not considered for use in this project.
 \subsection{WiFi}
+WiFi is the communication we chose to use for our project, as it has high bandwidth and speed, and is usable from any phone or computer.
+Quality or range would not be a problem.
+
+WiFi is currently used in commercial audio streaming applications like Sonos speaker systems.
+These systems are very closed off, and such they are largely inflexible in many use cases.
+In our project, our system will be open and flexible to any use case and number of speakers.
 
 \section{Project Aims}
+The ideal outcome of this project are a system that can be used for any arbitrary number of speakers and controlled from any computer or phone.
+The main challenge of this was understood to be the process of synchronisation between speakers wirelessly, while maintaining good, hi-fi quality sound.
+
 \subsection{Use Cases}
+The specific speaker system we will be designing will be a reasonably good quality home hi-fi system, where the audio can be streamed from any home computer or phone.
+The software that would run on the speaker would be able to be adapted to any system and and context with arbitrary number of channels.
 \subsection{Requirements}
 \end{document}
