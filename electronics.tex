@@ -173,12 +173,24 @@ The core evaluation of audio electronics requires the measurement of both the no
 	\item The area under the resultant trace is integrated to give the fundamental signal strength across the audible range.
 	\item A notch filter was applied to remove the 1kHz sine wave from the frequency response and the area under the new curve integrated.
 	\item The ratio of the signal strength without the desired sine wave versus the fundamental signal strength is taken, and the resultant value taken as the THD+N of the output signal.
+	\item Alternatively, by importing the FFT spectrum to MATLAB, the thd() function may be used to select the fundamental frequency and calculate the system THD without noise by integrating only the signal harmonics. 
 \end{itemize}
 
 
 \subsection{Results}
 
-The resultant FFT traces of the following signals are shown below. For comparison, the THD of the DAC was also measured using a Voltech PM1000+ power analyser and given as 0.36\%. Due to the speciality of this test equipment its value was assumed to be known good, however due to its configuration existing primarily for power line frequencies, it was not applicable to the class-d output of the amplifiers.
+The resultant FFT traces of the following signals are shown below, along with the resultant THD values via MATLAB. For comparison, the THD of the DAC was also measured using a Voltech PM1000+ power analyser and given as 0.36\%. Due to the speciality of this test equipment its value was assumed to be known good, however, due to its primary goal being for analysis of power line frequencies, it was not applicable to the class-d output of the amplifiers.
+\par
+
+\begin{center}
+\begin{tabular}{c|c|c}
+    System & THD(dB) & THD(\%) \\
+    \hline
+    DAC & -52.58 & 0.2349633 \\
+    MAXIM9744 & -17.67 & 13.0767554 \\
+    TAS5805M & -35.33 & 1.7119852 \\
+\end{tabular}
+\end{center}
 
 \begin{figure}[H]
     \begin{tikzpicture}
@@ -197,25 +209,6 @@ The resultant FFT traces of the following signals are shown below. For compariso
     \end{tikzpicture}
     \caption{Raw FFT of MAX9744 (no input) from Scope}
     \label{fig:lowpass-fft}
-\end{figure}
-
-\begin{figure}[H]
-    \begin{tikzpicture}
-        \begin{axis}[
-            width=\textwidth, 
-            height=\axisdefaultheight,  
-            xlabel={Frequency},
-            ylabel={Gain(dB)},  
-            xmin=0,
-            xmax=20000,     
-        ]
-        %\addplot table [mark=none, x=t, y=a, col sep=comma] {./data/saleae-outputs/sync.csv};
-        
-        \addplot table [mark=none, x=f, y=a, col sep=comma] {./data/csvs/test_001_3.csv};
-        \end{axis}
-    \end{tikzpicture}
-    \caption{Raw FFT of MAX9744 (1kHz sine input) from Scope}
-    \label{fig:maxim-thd}
 \end{figure}
 
 \begin{figure}[H]
@@ -281,4 +274,32 @@ The resultant FFT traces of the following signals are shown below. For compariso
     \caption{Raw FFT of TAS5805M (1kHz sine input) from Scope}
     \label{fig:ti-thd}
 \end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[scale=0.75]{./figs/dacTHDPlot.eps}        
+    \caption{THD Plot of DAC}
+    \label{fig:ti-thd}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[scale=0.75]{./figs/maxiTHDPlot.eps}        
+    \caption{THD Plot of Maxim}
+    \label{fig:ti-thd}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[scale=0.75]{./figs/tiTHDPlot.eps}        
+    \caption{THD Plot of TI}
+    \label{fig:ti-thd}
+\end{figure}
+
+\subsection{Discussion}
+
+While the calculated values have a high variance from those observed in the datasheet, their results conform well to both the power analyser result measured from the DAC and the subjective experience of the listener. The single stage system shows extremely little harmonic response within the FFT as a result of the advanced digital signal processing elements it incorporates, which is reflected in the pure THD values. For greater confidence a dedicated signal analyser with class-d configurations would be required, however was not available within the scope of the project. 
+\par 
+At the project outset it was considered the single stage system may present too great a task to develop for without its associated evaluation module, however the use of the software packages provided by Texas Instruments greatly accelerated development. Future work would therefore move on with this system in favour of the dual stage, and could be improved by leveraging the configurable biquad fil
+
 \end{document}
