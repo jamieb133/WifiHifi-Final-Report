@@ -914,23 +914,55 @@ The proportional gain, $K_p$ was set at $\frac{1}{100000}$ and the integral gain
 The integral term was set as the dominant term as the controller was found to work best acting mostly on the accumulated error, this is because the output streams falls out of sync slowly.
 
 \subsection{Missed Process Callbacks}
+Audio stuttering was often found to be caused when Jack failed to call the \lstinline{SlaveProcessor:process()} callback on time, this would result in a noticeable buffer under-run, i.e. a audible stutter.
+This was determined by probing the GPIO pin that is toggled for each callback. 
+An example of failed callbacks can be seen in figure \ref{fig:callbacks} at around times 8, 8.8 and 9.2 seconds, the pin has clearly failed to toggle showing that the callback has been missed.
+
+\medskip
+It was later found that the real-time priority of a Jack server can be specified when started and the default priority is ten.
+After the priority level was decreased to three, callbacks were not missed at nearly the same rate as the audio did not noticeably stutter nearly as much.
 
 \begin{figure}[H]
-\begin{tikzpicture}
-    \begin{axis}[
-        width=\textwidth, 
-        height=\axisdefaultheight, 
-        xtick={0,0.01,...,0.2},
-        xmin=0,
-        xmax=0.2,
-        ytick ={0, 1},
-        ymax = 1.5,
-        restrict x to domain*=0:0.2,
-        restrict y to domain*=0:1,]
-    \addplot table [mark=none, x=t, y=a, col sep=comma] {./data/saleae-outputs/run2.csv};
-    \addplot table [mark=nane, x=t, y=b, col sep=comma] {./data/saleae-outputs/run2.csv};
-    \end{axis}
-\end{tikzpicture}
+    \centering
+    \includegraphics[scale=0.75]{./figs/missed-callbacks.eps}        
+    \caption{Logic Trace of Missed Jack Process Callbacks}
+    \label{fig:callbacks}
+\end{figure}
+
+\subsection{Speaker Synchronisation}
+A main concern when using stereo, or any multi-channel configuration, audio setup is ensuring that the audio is correctly reproduced by all speakers.
+This requires that they maintain minimum differences in time offset and jitter such that the listener experiences an accurate representation of the multi-channel audio.
+This is of course trivial for a traditional wired setup or a local system driven by a single master clock.
+However, for multiple wireless tranducers, ensuring accurate syncronisation is a more complex task as each run entirely independant and decoupled master clock sources.
+
+\medskip
+To gauge the level of syncronisation between each remote Netjack server, the toggled GPIO pins on each speaker were probed using a logic analyser and audio was streamed continously for five minutes.
+From the exported data, the time offset between each speaker and thus, the degree of syncronisation could be determined.
+An example logic trace of the superimposed outputs is shown in figure \ref{fig:phase-offset}, notice that in this example the blue trace lags behind the orange trace for the first edge, comes back into syncronisation for the second edge and then lags behind again on the third.
+This varying time offset demonstrates a phenomenon known as jitter, this is less desirable than a constant phase offset as it cannot be corrected as easily, especially in user-space\footnote{this is not as applicable to real-time embedded systems} where schedulers can take several milliseconds to switch process.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[scale=0.75]{./figs/phase-offset.eps}        
+    \caption{Example logic trace showing time offset between two speakers}
+    \label{fig:phase-offset}
+\end{figure}
+
+The data was exported in csv format, Matlab was used for analysis.
+The phase offset for each edge was calculated by determining the time difference between each channel on each consecutive pair of edges.
+They were then subtracted to obtain the time offset for a given cycle and stored to a vector containing all values of $\Delta t$ for the experiment.
+
+\medskip
+The distribution of time offset between two speakers for five minutes of audio streaming is shown by the histogram in figure \ref{fig:histogram}.
+As can be seen, the largest distribution is clearly within approximately ten milliseconds.
+This shows that the speakers remained reasonably syncronised throughout the five minutes of playback as the time offset averages around approximately one millisecond.
+The mean time offset was calculated as \textbf{1.61ms}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[scale=0.75]{./figs/histogram.eps}        
+    \caption{Histogram of time offset ($\Delta t$) between two speakers}
+    \label{fig:histogram}
 \end{figure}
 
 \section{Desktop Application}
